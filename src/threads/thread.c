@@ -25,6 +25,17 @@
    that are ready to run but not actually running. */
 static struct list ready_list;
 
+/* Lista de processos no estado THREAD_BLOCKED, ou seja, processos
+    que estão bloquados para executar, porque não estão em execução.*/
+static struct list blocked_list;
+
+struct travado 
+  {
+    int64_t ticks;
+    struct semaphore semaforo;
+    struct list_elem elem;
+  };
+
 /* List of all processes.  Processes are added to this list
    when they are first scheduled and removed when they exit. */
 static struct list all_list;
@@ -92,6 +103,7 @@ thread_init (void)
 
   lock_init (&tid_lock);
   list_init (&ready_list);
+  list_init (&blocked_list);
   list_init (&all_list);
 
   /* Set up a thread structure for the running thread. */
@@ -241,6 +253,37 @@ thread_unblock (struct thread *t)
   list_push_back (&ready_list, &t->elem);
   t->status = THREAD_READY;
   intr_set_level (old_level);
+}
+
+/* Bota a trede pra dormir. Função bem massa */
+void
+thread_sleep (int64_t tiques)
+{
+  // Coloca thread na lista
+  struct travado trava;
+  sema_init(&trava.semaforo, 0);
+  trava.ticks = tiques;
+
+  list_push_back (&blocked_list, &trava.elem);
+  // Bloqueia thread
+  sema_down(&trava.semaforo);
+}
+
+/* Acorda todas as tredes cujo tick é maior (ou igual) que tiques*/
+void
+thread_wake (int64_t tiques)
+{
+  // Itera a lista e procura alguem para acordar
+  struct list_elem* e = list_begin (&blocked_list);
+  while (e != list_end (&blocked_list)) {
+    struct travado* t = list_entry (e, struct travado, elem);
+    if (t->ticks <= tiques) {
+      sema_up (&t->semaforo);
+      e = list_remove (e);
+    } else {
+      e = list_next (e);
+    }
+  }
 }
 
 /* Returns the name of the running thread. */
