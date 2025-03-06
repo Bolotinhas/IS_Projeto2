@@ -537,8 +537,10 @@ init_thread (struct thread *t, const char *name, int priority)
   t->stack = (uint8_t *) t + PGSIZE;
   t->priority = priority;
   t->magic = THREAD_MAGIC;
-  t->niceness = thread_current()->niceness; // Herda o niceness do pai
-  t->recent_cpu = thread_current()->recent_cpu; // Herda o recent_cpu do pai
+  if (t != initial_thread) { // Não pode chamar therad_current se t for initial_thread
+    t->niceness = thread_current()->niceness; // Herda o niceness do pai
+    t->recent_cpu = thread_current()->recent_cpu; // Herda o recent_cpu do pai
+  }
 
   old_level = intr_disable();
   list_push_back (&all_list, &t->allelem);
