@@ -110,6 +110,8 @@ thread_init (void)
   list_init (&ready_list);
   list_init (&blocked_list);
   list_init (&all_list);
+  
+  PAPAPA = 0;   // Load_avg inicializado com 0
 
   /* Set up a thread structure for the running thread. */
   initial_thread = running_thread ();
@@ -154,25 +156,25 @@ thread_tick (void)
   else
     kernel_ticks++;
 
+  // Incrementa o recent_cpu da thread rodando
   if(t != idle_thread)
    t->recent_cpu++;
 
   
   if(timer_ticks()%TIMER_FREQ == 0){
-  //load_avg = (59/60)load_avg + (1/60)ready_threads
-  
-   PAPAPA = FLOAT_ADD(FLOAT_MULT_MIX(FLOAT_DIV_MIX(FLOAT_CONST(59),60), PAPAPA),FLOAT_MULT_MIX(FLOAT_DIV_MIX(FLOAT_CONST(1),60),list_size(&ready_list))); //Cálculos precisos da equação load_avg cujo valor é: FLOAT_ADD(FLOAT_MULT_MIX(FLOAT_DIV_MIX(FLOAT_CONST(59),60), PAPAPA),FLOAT_MULT_MIX(FLOAT_DIV_MIX(FLOAT_CONST(1),60),list_size(&ready_list)));
-  //recent_cpu = (2*load_avg)/(2*load_avg + 1) * recent_cpu + nice
-  
-  struct list_elem *e;
-
-  for (e = list_begin (&all_list); e != list_end (&all_list);
-       e = list_next (e))
-    {
-      struct thread *u = list_entry (e, struct thread, allelem);
-      u->recent_cpu = (FLOAT_MULT_MIX(FLOAT_DIV(FLOAT_MULT_MIX(PAPAPA, 2), FLOAT_ADD_MIX(FLOAT_MULT_MIX(PAPAPA, 2),1)),u->recent_cpu) ,u->niceness); //Cálculos precisos da equação do recent_cpu de todos as threads cujo valor é:(FLOAT_MULT_MIX(FLOAT_DIV(FLOAT_MULT_MIX(PAPAPA, 2), FLOAT_ADD_MIX(FLOAT_MULT_MIX(PAPAPA, 2),1)),u->recent_cpu) ,u->niceness);
-    }
+    // load_avg = (59/60)load_avg + (1/60)ready_threads
+    PAPAPA = FLOAT_ADD(FLOAT_MULT(FLOAT_DIV_MIX(FLOAT_CONST(59),60), PAPAPA),FLOAT_MULT_MIX(FLOAT_DIV_MIX(FLOAT_CONST(1),60),list_size(&ready_list))); //Cálculos precisos da equação load_avg cujo valor é: FLOAT_ADD(FLOAT_MULT(FLOAT_DIV_MIX(FLOAT_CONST(59),60), PAPAPA),FLOAT_MULT_MIX(FLOAT_DIV_MIX(FLOAT_CONST(1),60),list_size(&ready_list)));
+    
+    struct list_elem *e;
+    for (e = list_begin (&all_list); e != list_end (&all_list);
+        e = list_next (e))
+      {
+        struct thread *u = list_entry (e, struct thread, allelem);
+        //recent_cpu = (2*load_avg)/(2*load_avg + 1) * recent_cpu + nice
+        u->recent_cpu = FLOAT_ADD_MIX(FLOAT_MULT(FLOAT_DIV(FLOAT_MULT_MIX(PAPAPA, 2), FLOAT_ADD_MIX(FLOAT_MULT_MIX(PAPAPA, 2),1)),u->recent_cpu) ,u->niceness); //Cálculos precisos da equação do recent_cpu de todos as threads cujo valor é:FLOAT_ADD_MIX(FLOAT_MULT(FLOAT_DIV(FLOAT_MULT_MIX(PAPAPA, 2), FLOAT_ADD_MIX(FLOAT_MULT_MIX(PAPAPA, 2),1)),u->recent_cpu) ,u->niceness);
+      }
   }
+  
    /* Enforce preemption. */
   if (++thread_ticks >= TIME_SLICE)
     intr_yield_on_return ();
@@ -421,6 +423,7 @@ thread_set_nice (int NICE)
 {
   /* Implemented. */
   thread_current()->niceness = NICE;
+  // FALTA RECALCULAR PRIORIDADE
 }
 
 /* Returns the current thread's nice value. */
@@ -436,7 +439,7 @@ int
 thread_get_load_avg (void) 
 {
   /* Implemented */
-  return PAPAPA;
+  return FLOAT_ROUND(FLOAT_MULT_MIX(PAPAPA, 100));
 }
 
 /* Returns 100 times the current thread's recent_cpu value. */
@@ -444,7 +447,7 @@ int
 thread_get_recent_cpu (void) 
 {
   /* Implemented. */
-  return thread_current()->recent_cpu;
+  return FLOAT_ROUND(FLOAT_MULT_MIX(thread_current()->recent_cpu, 100));
 }
 
 /* Idle thread.  Executes when no other thread is ready to run.
@@ -534,10 +537,10 @@ init_thread (struct thread *t, const char *name, int priority)
   t->stack = (uint8_t *) t + PGSIZE;
   t->priority = priority;
   t->magic = THREAD_MAGIC;
+  t->niceness = thread_current()->niceness; // Herda o niceness do pai
+  t->recent_cpu = thread_current()->recent_cpu; // Herda o recent_cpu do pai
 
   old_level = intr_disable();
-  t->niceness = thread_current()->niceness; //Agora nós mudamos
-  t->recent_cpu = thread_current()->recent_cpu; //Agora nós transformamos
   list_push_back (&all_list, &t->allelem);
   intr_set_level (old_level);
 }
