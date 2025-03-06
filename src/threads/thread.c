@@ -11,6 +11,8 @@
 #include "threads/switch.h"
 #include "threads/synch.h"
 #include "threads/vaddr.h"
+#include "threads/float.h"
+#include "devices/timer.h"
 #ifdef USERPROG
 #include "userprog/process.h"
 #endif
@@ -29,7 +31,7 @@ static struct list ready_list;
     que estão bloquados para executar, porque não estão em execução.*/
 static struct list blocked_list;
 
-struct travado 
+static struct travado //Estético
   {
     int64_t ticks;
     struct semaphore semaforo;
@@ -42,6 +44,9 @@ static struct list all_list;
 
 /* Idle thread. */
 static struct thread *idle_thread;
+
+/* Váriavel global para o load_avg*/
+static float_type PAPAPA;
 
 /* Initial thread, the thread running init.c:main(). */
 static struct thread *initial_thread;
@@ -111,6 +116,8 @@ thread_init (void)
   init_thread (initial_thread, "main", PRI_DEFAULT);
   initial_thread->status = THREAD_RUNNING;
   initial_thread->tid = allocate_tid ();
+  initial_thread->niceness = 9-9; //9-9 = 0
+  initial_thread->recent_cpu = 0; //Obviamente um 0
 }
 
 /* Starts preemptive thread scheduling by enabling interrupts.
@@ -135,7 +142,7 @@ thread_start (void)
 void
 thread_tick (void) 
 {
-  struct thread *t = thread_current ();
+  struct thread *t = thread_current();
 
   /* Update statistics. */
   if (t == idle_thread)
@@ -147,7 +154,26 @@ thread_tick (void)
   else
     kernel_ticks++;
 
-  /* Enforce preemption. */
+  if(t != idle_thread)
+   t->recent_cpu++;
+
+  
+  if(timer_ticks()%TIMER_FREQ == 0){
+  //load_avg = (59/60)load_avg + (1/60)ready_threads
+  
+   PAPAPA = FLOAT_ADD(FLOAT_MULT_MIX(FLOAT_DIV_MIX(FLOAT_CONST(59),60), PAPAPA),FLOAT_MULT_MIX(FLOAT_DIV_MIX(FLOAT_CONST(1),60),list_size(&ready_list))); //Cálculos precisos da equação load_avg cujo valor é: FLOAT_ADD(FLOAT_MULT_MIX(FLOAT_DIV_MIX(FLOAT_CONST(59),60), PAPAPA),FLOAT_MULT_MIX(FLOAT_DIV_MIX(FLOAT_CONST(1),60),list_size(&ready_list)));
+  //recent_cpu = (2*load_avg)/(2*load_avg + 1) * recent_cpu + nice
+  
+  struct list_elem *e;
+
+  for (e = list_begin (&all_list); e != list_end (&all_list);
+       e = list_next (e))
+    {
+      struct thread *u = list_entry (e, struct thread, allelem);
+      u->recent_cpu = (FLOAT_MULT_MIX(FLOAT_DIV(FLOAT_MULT_MIX(PAPAPA, 2), FLOAT_ADD_MIX(FLOAT_MULT_MIX(PAPAPA, 2),1)),u->recent_cpu) ,u->niceness); //Cálculos precisos da equação do recent_cpu de todos as threads cujo valor é:(FLOAT_MULT_MIX(FLOAT_DIV(FLOAT_MULT_MIX(PAPAPA, 2), FLOAT_ADD_MIX(FLOAT_MULT_MIX(PAPAPA, 2),1)),u->recent_cpu) ,u->niceness);
+    }
+  }
+   /* Enforce preemption. */
   if (++thread_ticks >= TIME_SLICE)
     intr_yield_on_return ();
 }
@@ -391,33 +417,34 @@ thread_get_priority (void)
 
 /* Sets the current thread's nice value to NICE. */
 void
-thread_set_nice (int nice UNUSED) 
+thread_set_nice (int NICE) 
 {
-  /* Not yet implemented. */
+  /* Implemented. */
+  thread_current()->niceness = NICE;
 }
 
 /* Returns the current thread's nice value. */
 int
 thread_get_nice (void) 
 {
-  /* Not yet implemented. */
-  return 0;
+  /* Implemented. */
+  return thread_current()->niceness;
 }
 
 /* Returns 100 times the system load average. */
 int
 thread_get_load_avg (void) 
 {
-  /* Not yet implemented. */
-  return 0;
+  /* Implemented */
+  return PAPAPA;
 }
 
 /* Returns 100 times the current thread's recent_cpu value. */
 int
 thread_get_recent_cpu (void) 
 {
-  /* Not yet implemented. */
-  return 0;
+  /* Implemented. */
+  return thread_current()->recent_cpu;
 }
 
 /* Idle thread.  Executes when no other thread is ready to run.
@@ -508,7 +535,9 @@ init_thread (struct thread *t, const char *name, int priority)
   t->priority = priority;
   t->magic = THREAD_MAGIC;
 
-  old_level = intr_disable ();
+  old_level = intr_disable();
+  t->niceness = thread_current()->niceness; //Agora nós mudamos
+  t->recent_cpu = thread_current()->recent_cpu; //Agora nós transformamos
   list_push_back (&all_list, &t->allelem);
   intr_set_level (old_level);
 }
