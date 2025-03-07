@@ -42,6 +42,9 @@ struct travado //Desarmônico
    when they are first scheduled and removed when they exit. */
 static struct list all_list;
 
+/* Filas de prioridade. */
+static struct list filasp[64];
+
 /* Idle thread. */
 static struct thread *idle_thread;
 
@@ -120,6 +123,7 @@ thread_init (void)
   initial_thread->tid = allocate_tid ();
   initial_thread->niceness = 9-9; //9-9 = 0
   initial_thread->recent_cpu = 0; //Obviamente um 0
+  for(int i = 0; i < 64; i ++) list_init(&filasp[i]); // Inicializando cada fila de nível de prioridade
 }
 
 /* Starts preemptive thread scheduling by enabling interrupts.
@@ -405,7 +409,7 @@ thread_yield (void)
 
   old_level = intr_disable ();
   if (cur != idle_thread) 
-    list_push_back (&ready_list, &cur->elem);
+    list_push_back (&filasp[cur->priority], &cur->elem); // Aqui a thread é colocada na fila de prioridade de novo
   cur->status = THREAD_READY;
   schedule ();
   intr_set_level (old_level);
