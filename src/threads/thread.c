@@ -31,7 +31,7 @@ static struct list ready_list;
     que estão bloquados para executar, porque não estão em execução.*/
 static struct list blocked_list;
 
-static struct travado //Estético
+struct travado //Desarmônico
   {
     int64_t ticks;
     struct semaphore semaforo;
@@ -141,8 +141,9 @@ thread_start (void)
 
 /*Função para calcular prioridade*/
 
-int thread_calc_priority(struct thread *t){
-  int a = FLOAT_ROUND(FLOAT_SUB(FLOAT_CONST(PRI_MAX),FLOAT_SUB_MIX(FLOAT_DIV_MIX(t->recent_cpu,4),2*t->niceness)));
+static int thread_calc_priority(struct thread *t){
+  //priority = PRI_MAX - (recent_cpu / 4) - (nice * 2)
+  int a = FLOAT_ROUND(FLOAT_SUB_MIX(FLOAT_SUB(FLOAT_CONST(PRI_MAX),FLOAT_DIV_MIX(t->recent_cpu,4)),2*t->niceness));
   if(a > PRI_MAX) a = PRI_MAX; else if(a < PRI_MIN) a = PRI_MIN;
   t->priority = a;
   return a;
@@ -169,7 +170,7 @@ thread_tick (void)
   if(t != idle_thread)
    t->recent_cpu++;
 
-  
+  enum intr_level old_level = intr_disable();
   if(timer_ticks()%TIMER_FREQ == 0){
     // load_avg = (59/60)load_avg + (1/60)ready_threads
     PAPAPA = FLOAT_ADD(FLOAT_MULT(FLOAT_DIV_MIX(FLOAT_CONST(59),60), PAPAPA),FLOAT_MULT_MIX(FLOAT_DIV_MIX(FLOAT_CONST(1),60),list_size(&ready_list))); //Cálculos precisos da equação load_avg cujo valor é: FLOAT_ADD(FLOAT_MULT(FLOAT_DIV_MIX(FLOAT_CONST(59),60), PAPAPA),FLOAT_MULT_MIX(FLOAT_DIV_MIX(FLOAT_CONST(1),60),list_size(&ready_list)));
@@ -184,16 +185,17 @@ thread_tick (void)
       }
   }
 
-if(timer_ticks()%TIME_SLICE == 0){
+  if(timer_ticks()%TIME_SLICE == 0){
     struct list_elem *e;
     for (e = list_begin (&all_list); e != list_end (&all_list);
         e = list_next (e))
-      {//priority = PRI_MAX - (recent_cpu / 4) - (nice * 2)
+      {
         struct thread *u = list_entry (e, struct thread, allelem);
         thread_calc_priority(u);
       }
   }
    
+  intr_set_level(old_level);
    /* Enforce preemption. */
   if (++thread_ticks >= TIME_SLICE)
     intr_yield_on_return ();
@@ -306,12 +308,15 @@ thread_unblock (struct thread *t)
 void
 thread_sleep (int64_t tiques)
 {
+  enum intr_level old_level;
   // Coloca thread na lista
   struct travado trava;
   sema_init(&trava.semaforo, 0);
   trava.ticks = tiques;
 
+  old_level = intr_disable();
   list_push_back (&blocked_list, &trava.elem);
+  intr_set_level (old_level);
   // Bloqueia thread
   sema_down(&trava.semaforo);
 }
@@ -320,17 +325,18 @@ thread_sleep (int64_t tiques)
 void
 thread_wake (int64_t tiques)
 {
+  enum intr_level old_level;
   // Itera a lista e procura alguem para acordar
+  old_level = intr_disable();
   struct list_elem* e = list_begin (&blocked_list);
-  while (e != list_end (&blocked_list)) {
+  for (; e != list_end(&blocked_list); e = list_next(e)) {
     struct travado* t = list_entry (e, struct travado, elem);
     if (t->ticks <= tiques) {
       sema_up (&t->semaforo);
-      e = list_remove (e);
-    } else {
-      e = list_next (e);
+      list_remove (e);
     }
   }
+  intr_set_level(old_level);
 }
 
 /* Returns the name of the running thread. */
@@ -426,7 +432,8 @@ thread_foreach (thread_action_func *func, void *aux)
 void
 thread_set_priority (int new_priority) 
 {
-  thread_current ()->priority = new_priority;
+  if (!thread_mlfqs)
+    thread_current ()->priority = new_priority;
 }
 
 /* Returns the current thread's priority. */
@@ -441,8 +448,11 @@ void
 thread_set_nice (int NICE) 
 {
   /* Implemented. */
-  thread_current()->niceness = NICE;
-  // FALTA RECALCULAR PRIORIDADE
+  struct thread *t = thread_current();
+  t->niceness = NICE;
+  int p = thread_calc_priority(t);
+  // if (p < thread_highest_priority())
+  //   thread_yield();
 }
 
 /* Returns the current thread's nice value. */
