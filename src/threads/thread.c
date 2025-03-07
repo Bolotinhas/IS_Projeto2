@@ -139,6 +139,15 @@ thread_start (void)
   sema_down (&idle_started);
 }
 
+/*Função para calcular prioridade*/
+
+int thread_calc_priority(struct thread *t){
+  int a = FLOAT_ROUND(FLOAT_SUB(FLOAT_CONST(PRI_MAX),FLOAT_SUB_MIX(FLOAT_DIV_MIX(t->recent_cpu,4),2*t->niceness)));
+  if(a > PRI_MAX) a = PRI_MAX; else if(a < PRI_MIN) a = PRI_MIN;
+  t->priority = a;
+  return a;
+}
+
 /* Called by the timer interrupt handler at each timer tick.
    Thus, this function runs in an external interrupt context. */
 void
@@ -174,7 +183,17 @@ thread_tick (void)
         u->recent_cpu = FLOAT_ADD_MIX(FLOAT_MULT(FLOAT_DIV(FLOAT_MULT_MIX(PAPAPA, 2), FLOAT_ADD_MIX(FLOAT_MULT_MIX(PAPAPA, 2),1)),u->recent_cpu) ,u->niceness); //Cálculos precisos da equação do recent_cpu de todos as threads cujo valor é:FLOAT_ADD_MIX(FLOAT_MULT(FLOAT_DIV(FLOAT_MULT_MIX(PAPAPA, 2), FLOAT_ADD_MIX(FLOAT_MULT_MIX(PAPAPA, 2),1)),u->recent_cpu) ,u->niceness);
       }
   }
-  
+
+if(timer_ticks()%TIME_SLICE == 0){
+    struct list_elem *e;
+    for (e = list_begin (&all_list); e != list_end (&all_list);
+        e = list_next (e))
+      {//priority = PRI_MAX - (recent_cpu / 4) - (nice * 2)
+        struct thread *u = list_entry (e, struct thread, allelem);
+        thread_calc_priority(u);
+      }
+  }
+   
    /* Enforce preemption. */
   if (++thread_ticks >= TIME_SLICE)
     intr_yield_on_return ();
