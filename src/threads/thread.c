@@ -200,7 +200,7 @@ thread_tick (void)
 
   // Incrementa o recent_cpu da thread rodando
   if(t != idle_thread)
-   t->recent_cpu++;
+   t->recent_cpu = FLOAT_ADD_MIX(t->recent_cpu, 1);
 
   enum intr_level old_level = intr_disable();
   if(timer_ticks()%TIMER_FREQ == 0){
