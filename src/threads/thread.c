@@ -187,9 +187,7 @@ thread_tick (void)
   enum intr_level old_level = intr_disable();
   if(timer_ticks()%TIMER_FREQ == 0){
     // load_avg = (59/60)load_avg + (1/60)ready_threads
-    if(thread_mlfqs) PAPAPA = FLOAT_ADD(FLOAT_MULT(FLOAT_DIV_MIX(FLOAT_CONST(59),60), PAPAPA),FLOAT_MULT_MIX(FLOAT_DIV_MIX(FLOAT_CONST(1),60),total_threadsp()))); //Cálculos precisos da equação load_avg cujo valor é: FLOAT_ADD(FLOAT_MULT(FLOAT_DIV_MIX(FLOAT_CONST(59),60), PAPAPA),FLOAT_MULT_MIX(FLOAT_DIV_MIX(FLOAT_CONST(1),60),total_threadsp()));
-    else PAPAPA = FLOAT_ADD(FLOAT_MULT(FLOAT_DIV_MIX(FLOAT_CONST(59),60), PAPAPA),FLOAT_MULT_MIX(FLOAT_DIV_MIX(FLOAT_CONST(1),60),list_size(&ready_list))); //Cálculos precisos da equação load_avg cujo valor é: FLOAT_ADD(FLOAT_MULT(FLOAT_DIV_MIX(FLOAT_CONST(59),60), PAPAPA),FLOAT_MULT_MIX(FLOAT_DIV_MIX(FLOAT_CONST(1),60),list_size(&ready_list)));
-
+    PAPAPA = FLOAT_ADD(FLOAT_MULT(FLOAT_DIV_MIX(FLOAT_CONST(59),60), PAPAPA),FLOAT_MULT_MIX(FLOAT_DIV_MIX(FLOAT_CONST(1),60),total_threadsp()))); //Cálculos precisos da equação load_avg cujo valor é: FLOAT_ADD(FLOAT_MULT(FLOAT_DIV_MIX(FLOAT_CONST(59),60), PAPAPA),FLOAT_MULT_MIX(FLOAT_DIV_MIX(FLOAT_CONST(1),60),total_threadsp()));
     struct list_elem *e;
     for (e = list_begin (&all_list); e != list_end (&all_list);
         e = list_next (e))
