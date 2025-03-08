@@ -153,6 +153,16 @@ static int thread_calc_priority(struct thread *t){
   return a;
 }
 
+/* Função pra calcular o total de threads prontas em filasp*/
+static int total_threadsp(void) {
+  int total = 0;
+  for(int i = 0; i < 64; i ++) {
+    total += list_size(&filasp[i]);
+  }
+
+  return total;
+}
+
 /* Called by the timer interrupt handler at each timer tick.
    Thus, this function runs in an external interrupt context. */
 void
@@ -177,8 +187,9 @@ thread_tick (void)
   enum intr_level old_level = intr_disable();
   if(timer_ticks()%TIMER_FREQ == 0){
     // load_avg = (59/60)load_avg + (1/60)ready_threads
-    PAPAPA = FLOAT_ADD(FLOAT_MULT(FLOAT_DIV_MIX(FLOAT_CONST(59),60), PAPAPA),FLOAT_MULT_MIX(FLOAT_DIV_MIX(FLOAT_CONST(1),60),list_size(&ready_list))); //Cálculos precisos da equação load_avg cujo valor é: FLOAT_ADD(FLOAT_MULT(FLOAT_DIV_MIX(FLOAT_CONST(59),60), PAPAPA),FLOAT_MULT_MIX(FLOAT_DIV_MIX(FLOAT_CONST(1),60),list_size(&ready_list)));
-    
+    if(thread_mlfqs) PAPAPA = FLOAT_ADD(FLOAT_MULT(FLOAT_DIV_MIX(FLOAT_CONST(59),60), PAPAPA),FLOAT_MULT_MIX(FLOAT_DIV_MIX(FLOAT_CONST(1),60),total_threadsp()))); //Cálculos precisos da equação load_avg cujo valor é: FLOAT_ADD(FLOAT_MULT(FLOAT_DIV_MIX(FLOAT_CONST(59),60), PAPAPA),FLOAT_MULT_MIX(FLOAT_DIV_MIX(FLOAT_CONST(1),60),total_threadsp()));
+    else PAPAPA = FLOAT_ADD(FLOAT_MULT(FLOAT_DIV_MIX(FLOAT_CONST(59),60), PAPAPA),FLOAT_MULT_MIX(FLOAT_DIV_MIX(FLOAT_CONST(1),60),list_size(&ready_list))); //Cálculos precisos da equação load_avg cujo valor é: FLOAT_ADD(FLOAT_MULT(FLOAT_DIV_MIX(FLOAT_CONST(59),60), PAPAPA),FLOAT_MULT_MIX(FLOAT_DIV_MIX(FLOAT_CONST(1),60),list_size(&ready_list)));
+
     struct list_elem *e;
     for (e = list_begin (&all_list); e != list_end (&all_list);
         e = list_next (e))
@@ -303,7 +314,8 @@ thread_unblock (struct thread *t)
 
   old_level = intr_disable ();
   ASSERT (t->status == THREAD_BLOCKED);
-  list_push_back (&ready_list, &t->elem);
+  if(thread_mlfqs) list_push_back (&filasp[t->priority], &t->elem);
+  else list_push_back (&ready_list, &t->elem);
   t->status = THREAD_READY;
   intr_set_level (old_level);
 }
@@ -601,10 +613,22 @@ alloc_frame (struct thread *t, size_t size)
 static struct thread *
 next_thread_to_run (void) 
 {
-  if (list_empty (&ready_list))
+  if(thread_mlfqs) {
+    for(int i = 63; i >= 0; i--) { // Percorrendo toda a lista em busca da thread pronta com maior prioridade
+      if(!list_empty(&filasp[i])) { // Encontrou!
+        return list_entry(list_pop_front(&filasp[i]), struct thread, elem);
+      } 
+    }
+
     return idle_thread;
-  else
-    return list_entry (list_pop_front (&ready_list), struct thread, elem);
+  }
+
+  else {
+    if (list_empty (&ready_list))
+      return idle_thread;
+    else
+      return list_entry (list_pop_front (&ready_list), struct thread, elem);
+  }
 }
 
 /* Completes a thread switch by activating the new thread's page
