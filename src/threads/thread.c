@@ -91,6 +91,9 @@ static void schedule (void);
 void thread_schedule_tail (struct thread *prev);
 static tid_t allocate_tid (void);
 
+static int thread_calc_priority(struct thread *t);
+static int thread_get_highest_priority();
+
 /* Initializes the threading system by transforming the code
    that's currently running into a thread.  This can't work in
    general and it is possible in this case only because loader.S
@@ -113,6 +116,7 @@ thread_init (void)
   list_init (&ready_list);
   list_init (&blocked_list);
   list_init (&all_list);
+  for(int i = 0; i < 64; i ++) list_init(&filasp[i]); // Inicializando cada fila de nível de prioridade
   
   PAPAPA = 0;   // Load_avg inicializado com 0
 
@@ -121,9 +125,6 @@ thread_init (void)
   init_thread (initial_thread, "main", PRI_DEFAULT);
   initial_thread->status = THREAD_RUNNING;
   initial_thread->tid = allocate_tid ();
-  initial_thread->niceness = 9-9; //9-9 = 0
-  initial_thread->recent_cpu = 0; //Obviamente um 0
-  for(int i = 0; i < 64; i ++) list_init(&filasp[i]); // Inicializando cada fila de nível de prioridade
 }
 
 /* Starts preemptive thread scheduling by enabling interrupts.
@@ -144,13 +145,28 @@ thread_start (void)
 }
 
 /*Função para calcular prioridade*/
-
 static int thread_calc_priority(struct thread *t){
   //priority = PRI_MAX - (recent_cpu / 4) - (nice * 2)
   int a = FLOAT_ROUND(FLOAT_SUB_MIX(FLOAT_SUB(FLOAT_CONST(PRI_MAX),FLOAT_DIV_MIX(t->recent_cpu,4)),2*t->niceness));
   if(a > PRI_MAX) a = PRI_MAX; else if(a < PRI_MIN) a = PRI_MIN;
   t->priority = a;
   return a;
+}
+
+/* Retorna a maior prioridade cuja fila não está vazia.
+   Se todas estiverem vazias, retorna -1. */
+static int thread_get_highest_priority()
+{
+  enum intr_level old_level;
+  int highest = -1;
+  old_level = intr_disable();
+  for (int i=63; i>=0 && highest==-1; i--) {
+    if (!list_empty(&filasp[i])) {
+      highest = i;
+    }
+  }
+  intr_set_level(old_level);
+  return highest;
 }
 
 /* Called by the timer interrupt handler at each timer tick.
@@ -408,8 +424,12 @@ thread_yield (void)
   ASSERT (!intr_context ());
 
   old_level = intr_disable ();
-  if (cur != idle_thread) 
-    list_push_back (&filasp[cur->priority], &cur->elem); // Aqui a thread é colocada na fila de prioridade de novo
+  if (cur != idle_thread) {
+    if (thread_mlfqs)
+      list_push_back (&filasp[cur->priority], &cur->elem); // Aqui a thread é colocada na fila de prioridade de novo
+    else
+      list_push_back (&ready_list, &cur->elem);  
+  }
   cur->status = THREAD_READY;
   schedule ();
   intr_set_level (old_level);
@@ -455,8 +475,8 @@ thread_set_nice (int NICE)
   struct thread *t = thread_current();
   t->niceness = NICE;
   int p = thread_calc_priority(t);
-  // if (p < thread_highest_priority())
-  //   thread_yield();
+  if (p < thread_get_highest_priority())
+    thread_yield();
 }
 
 /* Returns the current thread's nice value. */
@@ -570,10 +590,13 @@ init_thread (struct thread *t, const char *name, int priority)
   t->stack = (uint8_t *) t + PGSIZE;
   t->priority = priority;
   t->magic = THREAD_MAGIC;
-  if (t != initial_thread) { // Não pode chamar therad_current se t for initial_thread
+  if (t == initial_thread) {
+    t->niceness = t->recent_cpu = 0;
+  } else {
     t->niceness = thread_current()->niceness; // Herda o niceness do pai
     t->recent_cpu = thread_current()->recent_cpu; // Herda o recent_cpu do pai
   }
+  if (thread_mlfqs) thread_calc_priority(t);
 
   old_level = intr_disable();
   list_push_back (&all_list, &t->allelem);
