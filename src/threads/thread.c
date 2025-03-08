@@ -92,7 +92,7 @@ void thread_schedule_tail (struct thread *prev);
 static tid_t allocate_tid (void);
 
 static int thread_calc_priority(struct thread *t);
-static int thread_get_highest_priority();
+static int thread_get_highest_priority(void);
 
 /* Initializes the threading system by transforming the code
    that's currently running into a thread.  This can't work in
@@ -160,12 +160,14 @@ static int total_threadsp(void) {
     total += list_size(&filasp[i]);
   }
 
+  if (thread_current() != idle_thread) total++;
+
   return total;
 }
 
 /* Retorna a maior prioridade cuja fila não está vazia.
    Se todas estiverem vazias, retorna -1. */
-static int thread_get_highest_priority()
+static int thread_get_highest_priority(void)
 {
   enum intr_level old_level;
   int highest = -1;
