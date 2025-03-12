@@ -138,6 +138,7 @@ void thread_foreach (thread_action_func *, void *);
 int thread_get_priority (void);
 void thread_set_priority (int);
 
+int thread_get_highest_priority(void); //nova funcao para pegar a maior prioridade atual
 int thread_get_nice (void);
 void thread_set_nice (int);
 int thread_get_recent_cpu (void);
