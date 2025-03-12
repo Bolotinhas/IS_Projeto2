@@ -31,10 +31,10 @@ static struct list ready_list;
     que estão bloquados para executar, porque não estão em execução.*/
 static struct list blocked_list;
 
-struct travado //Desarmônico
+struct travado //struct para gerenciar as threads que durmirem
   {
     int64_t ticks;
-    struct semaphore semaforo;
+    struct semaphore semaforo; 
     struct list_elem elem;
   };
 
@@ -91,7 +91,7 @@ static void schedule (void);
 void thread_schedule_tail (struct thread *prev);
 static tid_t allocate_tid (void);
 
-static int thread_calc_priority(struct thread *t);
+static int thread_calc_priority(struct thread *t); //funcao para calcular prioridade
 
 /* Initializes the threading system by transforming the code
    that's currently running into a thread.  This can't work in
@@ -147,7 +147,7 @@ thread_start (void)
 static int thread_calc_priority(struct thread *t){
   //priority = PRI_MAX - (recent_cpu / 4) - (nice * 2)
   int a = FLOAT_ROUND(FLOAT_SUB_MIX(FLOAT_SUB(FLOAT_CONST(PRI_MAX),FLOAT_DIV_MIX(t->recent_cpu,4)),2*t->niceness));
-  if(a > PRI_MAX) a = PRI_MAX; else if(a < PRI_MIN) a = PRI_MIN;
+  if(a > PRI_MAX) a = PRI_MAX; else if(a < PRI_MIN) a = PRI_MIN; //verificando que a e maior ou igual a 0 e menor ou igual a 63
   t->priority = a;
   return a;
 }
@@ -156,10 +156,10 @@ static int thread_calc_priority(struct thread *t){
 static int total_threadsp(void) {
   int total = 0;
   for(int i = 0; i < 64; i ++) {
-    total += list_size(&filasp[i]);
+    total += list_size(&filasp[i]); //somando a variavel total a quantidade de threads na lista de prioridade
   }
 
-  if (thread_current() != idle_thread) total++;
+  if (thread_current() != idle_thread) total++; //somando a thread atual se nao for idle_thread
 
   return total;
 }
@@ -202,26 +202,27 @@ thread_tick (void)
    t->recent_cpu = FLOAT_ADD_MIX(t->recent_cpu, 1);
 
   enum intr_level old_level = intr_disable();
+   //atualizando o load average e o recentcpu das threads se ticks for um multiplo de 100
   if(timer_ticks()%TIMER_FREQ == 0){
     // load_avg = (59/60)load_avg + (1/60)ready_threads
-    PAPAPA = FLOAT_ADD(FLOAT_MULT(FLOAT_DIV_MIX(FLOAT_CONST(59),60), PAPAPA),FLOAT_MULT_MIX(FLOAT_DIV_MIX(FLOAT_CONST(1),60),total_threadsp())); //Cálculos precisos da equação load_avg cujo valor é: FLOAT_ADD(FLOAT_MULT(FLOAT_DIV_MIX(FLOAT_CONST(59),60), PAPAPA),FLOAT_MULT_MIX(FLOAT_DIV_MIX(FLOAT_CONST(1),60),total_threadsp()));
+    PAPAPA = FLOAT_ADD(FLOAT_MULT(FLOAT_DIV_MIX(FLOAT_CONST(59),60), PAPAPA),FLOAT_MULT_MIX(FLOAT_DIV_MIX(FLOAT_CONST(1),60),total_threadsp())); 
     struct list_elem *e;
     for (e = list_begin (&all_list); e != list_end (&all_list);
         e = list_next (e))
       {
         struct thread *u = list_entry (e, struct thread, allelem);
         //recent_cpu = (2*load_avg)/(2*load_avg + 1) * recent_cpu + nice
-        u->recent_cpu = FLOAT_ADD_MIX(FLOAT_MULT(FLOAT_DIV(FLOAT_MULT_MIX(PAPAPA, 2), FLOAT_ADD_MIX(FLOAT_MULT_MIX(PAPAPA, 2),1)),u->recent_cpu) ,u->niceness); //Cálculos precisos da equação do recent_cpu de todos as threads cujo valor é:FLOAT_ADD_MIX(FLOAT_MULT(FLOAT_DIV(FLOAT_MULT_MIX(PAPAPA, 2), FLOAT_ADD_MIX(FLOAT_MULT_MIX(PAPAPA, 2),1)),u->recent_cpu) ,u->niceness);
+        u->recent_cpu = FLOAT_ADD_MIX(FLOAT_MULT(FLOAT_DIV(FLOAT_MULT_MIX(PAPAPA, 2), FLOAT_ADD_MIX(FLOAT_MULT_MIX(PAPAPA, 2),1)),u->recent_cpu) ,u->niceness); 
       }
   }
-
+  //atualizando a prioridade das threads se o tick atual for um multiplo de 4
   if(timer_ticks()%TIME_SLICE == 0){
     struct list_elem *e;
     for (e = list_begin (&all_list); e != list_end (&all_list);
         e = list_next (e))
       {
         struct thread *u = list_entry (e, struct thread, allelem);
-        thread_calc_priority(u);
+        thread_calc_priority(u); //calculando a prioridade nova
       }
   }
    
@@ -335,7 +336,7 @@ thread_unblock (struct thread *t)
   intr_set_level (old_level);
 }
 
-/* Bota a trede pra dormir. Função bem massa */
+/* Bota a thread pra dormir. (Função bem massa)*/
 void
 thread_sleep (int64_t tiques)
 {
@@ -343,16 +344,16 @@ thread_sleep (int64_t tiques)
   // Coloca thread na lista
   struct travado trava;
   sema_init(&trava.semaforo, 0);
-  trava.ticks = tiques;
+  trava.ticks = tiques; //coloca o numero de ticks em que a thread deve acordar
 
   old_level = intr_disable();
-  list_push_back (&blocked_list, &trava.elem);
+  list_push_back (&blocked_list, &trava.elem); //colocando o semaforo na lista de bloqueados
   intr_set_level (old_level);
   // Bloqueia thread
   sema_down(&trava.semaforo);
 }
 
-/* Acorda todas as tredes cujo tick é maior (ou igual) que tiques*/
+/* Acorda todas as threads cujo tick é maior (ou igual) que tiques*/
 void
 thread_wake (int64_t tiques)
 {
@@ -362,9 +363,9 @@ thread_wake (int64_t tiques)
   struct list_elem* e = list_begin (&blocked_list);
   for (; e != list_end(&blocked_list); e = list_next(e)) {
     struct travado* t = list_entry (e, struct travado, elem);
-    if (t->ticks <= tiques) {
-      sema_up (&t->semaforo);
-      list_remove (e);
+    if (t->ticks <= tiques) { //se os ticks da thread (representada pelo semaforo) for menor que os tiques atuais, ela deve acordar
+      sema_up (&t->semaforo); //acordando a thread
+      list_remove (e); //remove a thread da lista de bloqueados
     }
   }
   intr_set_level(old_level);
@@ -467,7 +468,7 @@ thread_foreach (thread_action_func *func, void *aux)
 void
 thread_set_priority (int new_priority) 
 {
-  if (!thread_mlfqs)
+  if (!thread_mlfqs) //se o escalonador nao for o mlfqs, a funcao funciona normalmente
     thread_current ()->priority = new_priority;
 }
 
@@ -485,16 +486,15 @@ thread_set_nice (int NICE)
   /* Implemented. */
   struct thread *t = thread_current();
   t->niceness = NICE;
-  int p = thread_calc_priority(t);
-  if (p < thread_get_highest_priority())
-    thread_yield();
+  int p = thread_calc_priority(t); //calcula a nova prioridade pois o nice foi alterado
+  if (p < thread_get_highest_priority()) //checa se a prioridade e a mais alta
+    thread_yield(); //se nao for, e dado thread_yield
 }
 
 /* Returns the current thread's nice value. */
 int
 thread_get_nice (void) 
 {
-  /* Implemented. */
   return thread_current()->niceness;
 }
 
@@ -502,7 +502,6 @@ thread_get_nice (void)
 int
 thread_get_load_avg (void) 
 {
-  /* Implemented */
   return FLOAT_ROUND(FLOAT_MULT_MIX(PAPAPA, 100));
 }
 
@@ -510,7 +509,6 @@ thread_get_load_avg (void)
 int
 thread_get_recent_cpu (void) 
 {
-  /* Implemented. */
   return FLOAT_ROUND(FLOAT_MULT_MIX(thread_current()->recent_cpu, 100));
 }
 
@@ -602,12 +600,12 @@ init_thread (struct thread *t, const char *name, int priority)
   t->priority = priority;
   t->magic = THREAD_MAGIC;
   if (t == initial_thread) {
-    t->niceness = t->recent_cpu = 0;
+    t->niceness = t->recent_cpu = 0; //declara o niceness e o recentcpu como 0
   } else {
     t->niceness = thread_current()->niceness; // Herda o niceness do pai
     t->recent_cpu = thread_current()->recent_cpu; // Herda o recent_cpu do pai
   }
-  if (thread_mlfqs) thread_calc_priority(t);
+  if (thread_mlfqs) thread_calc_priority(t); //calcula a prioridade da thread se o escalonador for o mlfqs
 
   old_level = intr_disable();
   list_push_back (&all_list, &t->allelem);
@@ -637,14 +635,14 @@ next_thread_to_run (void)
 {
   if(thread_mlfqs) {
     for(int i = 63; i >= 0; i--) { // Percorrendo toda a lista em busca da thread pronta com maior prioridade
-      if(!list_empty(&filasp[i])) { // Encontrou!
-        return list_entry(list_pop_front(&filasp[i]), struct thread, elem);
+      if(!list_empty(&filasp[i])) { 
+        return list_entry(list_pop_front(&filasp[i]), struct thread, elem); //quando a thread de maior prioridade for encontrada, a thread no comeco da lista e escalonada
       } 
     }
 
     return idle_thread;
   }
-
+  //round robin
   else {
     if (list_empty (&ready_list))
       return idle_thread;
