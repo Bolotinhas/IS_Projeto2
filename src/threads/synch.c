@@ -31,6 +31,7 @@
 #include <string.h>
 #include "threads/interrupt.h"
 #include "threads/thread.h"
+#include "threads/thread.c"
 
 /* Initializes semaphore SEMA to VALUE.  A semaphore is a
    nonnegative integer along with two atomic operators for
@@ -233,6 +234,9 @@ lock_release (struct lock *lock)
 
   lock->holder = NULL;
   sema_up (&lock->semaphore);
+
+   if(thread_get_priority() < thread_get_highest_priority()) //checa se a prioridade da thread atual nao e a maior prioridade
+      thread_yield(); //yield caso nao for mais a maior prioridade
 }
 
 /* Returns true if the current thread holds LOCK, false
