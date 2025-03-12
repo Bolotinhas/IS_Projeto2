@@ -70,10 +70,10 @@ timer_calibrate (void)
 int64_t
 timer_ticks (void) 
 {
-  enum intr_level old_level = intr_disable ();
-  int64_t t = ticks;
-  intr_set_level (old_level);
-  return t;
+  enum intr_level old_level = intr_disable (); //desativa interrupcao
+  int64_t t = ticks; // coleta a variavel global ticks
+  intr_set_level (old_level); //ativa novamente as interrupcoes
+  return t; //retorna o tick atual
 }
 
 /* Returns the number of timer ticks elapsed since THEN, which
@@ -89,12 +89,10 @@ timer_elapsed (int64_t then)
 void
 timer_sleep (int64_t ticks) 
 {
-  int64_t start = timer_ticks ();
+  int64_t start = timer_ticks (); //coleta os ticks atuais
   
-  ASSERT (intr_get_level () == INTR_ON);
-  thread_sleep (start + ticks);
-  // while (timer_elapsed (start) < ticks) 
-  //   thread_yield ();
+  ASSERT (intr_get_level () == INTR_ON); //verifica se as interrupcoes estao ligadas
+  thread_sleep (start + ticks); //chama a funcao thread_sleep para a thread durmir ate o valor no argumento de thread_sleep
 }
 
 /* Sleeps for approximately MS milliseconds.  Interrupts must be
@@ -171,9 +169,9 @@ timer_print_stats (void)
 static void
 timer_interrupt (struct intr_frame *args UNUSED)
 {
-  ticks++;
-  thread_tick ();
-  thread_wake(ticks);
+  ticks++; //atualiza os ticks
+  thread_tick (); //chama thread_ticks para atuar as variaveis recentcpu e niceness das threads
+  thread_wake(ticks); // acorda as threads que devem acordar no valor de tick atual caso houver
 }
 
 /* Returns true if LOOPS iterations waits for more than one timer
